@@ -1,0 +1,14 @@
+version: 24.0.5
+
+services:
+  db:
+    image: mysql:8.2.0
+    command: mysqld --default-authentication-plugin=caching_sha2_password
+    restart: no
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: imageDatabase
+      MYSQL_USER: user
+      MYSQL_PASSWORD: root
+    ports:
+      - "3306:3306"
