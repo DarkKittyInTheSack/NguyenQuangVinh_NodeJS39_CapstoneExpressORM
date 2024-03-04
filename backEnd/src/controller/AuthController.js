@@ -114,13 +114,15 @@ export const AuthController = {
         if(data){
             let checkRefreshToken = jwtoken.checkRefreshToken(data.dataValues.refresh_token);
             let decodeRefreshToken = jwtoken.decodeToken(data.dataValues.refresh_token);
-            console.log(decodeRefreshToken);
 
-            if(checkRefreshToken === null && decode.userId === decodeRefreshToken.userId){
-                let newToken = jwtoken.createToken(data.dataValues.nguoi_dung_id)
-                responseApi(res,200,{newLoginToken: newToken},COMPLETE_CREATE_TOKEN)
-            }
-            responseApi(res,401,'Unauthorized',FAIL_CREATE_TOKEN)
+            if(checkRefreshToken == null && decode.key == decodeRefreshToken.key){
+                let key = new Date().getTime();
+                let loginToken = jwtoken.createToken({userId: data.dataValues.nguoi_dung_id,key});
+                responseApi(res,200,{newLoginToken: loginToken},COMPLETE_CREATE_TOKEN)
+            }else{
+                responseApi(res,401,'Unauthorized',FAIL_CREATE_TOKEN)
+            }   
+            
         }else{
             responseApi(res,404,{},USER_NOT_EXIST)
         }

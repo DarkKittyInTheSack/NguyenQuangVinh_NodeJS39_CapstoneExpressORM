@@ -1,10 +1,8 @@
 import jwt from 'jsonwebtoken'
-import { responseApi } from './response.js';
-import { TOKEN_EXPIRED } from '../utils/jwtMessageUtil.js';
 
 export const jwtoken = {
-    createToken: (data) => jwt.sign(data,'SECRET_KEY',{algorithm: 'HS256', expiresIn: '24h' }),
-    createRefreshToken: (data) => jwt.sign(data,'SECRET_REFRESH_KEY',{algorithm: 'HS256', expiresIn: '24h' }),
+    createToken: (data) => jwt.sign(data,'SECRET_KEY',{algorithm: 'HS256', expiresIn: 86400*1 }),
+    createRefreshToken: (data) => jwt.sign(data,'SECRET_REFRESH_KEY',{algorithm: 'HS256', expiresIn: 86400*7 }),
     checkToken: (data) => jwt.verify(data,'SECRET_KEY', (err,decode) => err),
     checkRefreshToken: (data) => jwt.verify(data,'SECRET_KEY', (err,decode) => err),
     decodeToken: (data) => jwt.decode(data),

@@ -29,6 +29,10 @@ export default class nguoi_dung extends Model{
                 allowNull: false,
                 type: DataTypes.STRING(1000)
             },
+            refresh_token: {
+                allowNull: false,
+                type: DataTypes.STRING(1000)
+            },
         },{
             sequelize,
             tableName: 'nguoi_dung',

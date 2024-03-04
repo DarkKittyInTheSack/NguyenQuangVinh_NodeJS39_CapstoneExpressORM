@@ -10,7 +10,6 @@ authRouter.get('/reset-login-token',AuthController.resetLoginToken)
 
 authRouter.post('/login', AuthController.loginUser)
 authRouter.post('/register', AuthController.registerUser)
-authRouter.post('/reset-token', AuthController.resetLoginToken)
 authRouter.post('/change-password/:email', AuthController.changePassword)
 authRouter.put('/update', AuthController.updateUserInformation)
 
