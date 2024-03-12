@@ -1,5 +1,6 @@
 import express from "express";
 import { ImageController } from "../controller/ImageController.js";
+import upload from "../middleware/multer.middleware.js";
 
 const imageRouter = express.Router()
 
@@ -10,7 +11,7 @@ imageRouter.get('/search-image/:key',ImageController.searchImage)
 imageRouter.get('/get-comment/:imageId',ImageController.getCommentByImage)
 imageRouter.get('/get-comment-paging/:imageId/:page',ImageController.getCommentByIdPage)
 imageRouter.get('/get-save-image',ImageController.getSaveImageByUserId)
-imageRouter.post('/add-image',ImageController.addNewImage)
+imageRouter.post('/add-image',upload.single('image'),ImageController.addNewImage)
 imageRouter.post('/add-comment',ImageController.addNewComment)
 imageRouter.post('/save-image/:imageId',ImageController.saveImageByUserId)
 imageRouter.put('/image-update/:imageId',ImageController.updateImage)

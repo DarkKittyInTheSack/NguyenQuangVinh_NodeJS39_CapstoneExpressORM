@@ -1,13 +1,14 @@
 import { responseApi } from "../config/response.js";
-import sequelize from "../model/Connection.js";
-import initModels from "../model/initModel.js";
 import bcrypt from 'bcrypt'
-import { COMPLETE_CREATE_USER_PROFILE, COMPLETE_GET_USER_PROFILE, COMPLETE_UPDATE_USER_PROFILE, EMAIL_EXIST, EMAIL_NOT_EXIST, FAIL_CREATE_USER_PROFILE, FAIL_GET_USER_PROFILE, FAIL_UPDATE_USER_PROFILE, USER_PROFILE_EXIST } from "../utils/messageUtil.js";
+import { COMPLETE_CREATE_USER_PROFILE, COMPLETE_GET_USER_PROFILE, COMPLETE_UPDATE_USER_PROFILE, EMAIL_EXIST, EMAIL_NOT_EXIST, FAIL_CREATE_USER_PROFILE, FAIL_GET_USER_PROFILE, FAIL_UPDATE_USER_PROFILE, IMAGE_PATH_INVALID, USER_PROFILE_EXIST } from "../utils/messageUtil.js";
 import { jwtoken } from "../config/jwt.js";
 import { COMPLETE_CHANGE_PASSWORD, COMPLETE_CREATE_TOKEN, EMAIL_INVALID, FAIL_CHANGE_PASSWORD, FAIL_CREATE_TOKEN, FIELD_REQUIRED, LOGIN_COMPLETE, PASSWORD_DO_NOT_MATCH, PASSWORD_FAIL, TOKEN_EXPIRED, USER_NOT_EXIST } from "../utils/jwtMessageUtil.js";
 import { validationData } from "../utils/validationData.js";
+import {PrismaClient} from '@prisma/client'
+import uploadFile from "../middleware/cloudinary.js";
 
-const model = initModels(sequelize)
+// const model = initModels(sequelize)
+let model = new PrismaClient()
 
 export const AuthController = {
     generateRandomId: () =>{
@@ -16,7 +17,7 @@ export const AuthController = {
 
     checkExistUser: async (userId) =>{
 
-        let data = await model.nguoi_dung.findOne({
+        let data = await model.nguoi_dung.findFirst({
             where: {
                 nguoi_dung_id: userId
             }
@@ -26,10 +27,10 @@ export const AuthController = {
 
     checkExistEmail: async (email) =>{
 
-        let data = await model.nguoi_dung.findOne({
-            where: {
-                email: email
-            }
+        let data = await model.nguoi_dung.findFirst({
+           where:{
+            email:email
+           }
         });
 
         return data;
@@ -53,14 +54,15 @@ export const AuthController = {
                 if(checkEmail){
                     if(bcrypt.compareSync(password,checkEmail.mat_khau)){
                         let key = new Date().getTime();
-                        let token = jwtoken.createToken({userId: checkEmail.dataValues.nguoi_dung_id,key});
-                        let tokenRefresh = jwtoken.createToken({userId: checkEmail.dataValues.nguoi_dung_id,key});
+                        let token = jwtoken.createToken({userId: checkEmail.nguoi_dung_id,key});
+                        let tokenRefresh = jwtoken.createToken({userId: checkEmail.nguoi_dung_id,key});
         
-                        checkEmail.dataValues.refresh_token = tokenRefresh
-        
-                        let userData = await model.nguoi_dung.update(checkEmail.dataValues,{
+                        let userData = await model.nguoi_dung.update({
                             where:{
-                                nguoi_dung_id: checkEmail.dataValues.nguoi_dung_id
+                                nguoi_dung_id: checkEmail.nguoi_dung_id
+                            },
+                            data:{
+                                refresh_token: tokenRefresh
                             }
                         })
                         res.setHeader('token',token)
@@ -79,20 +81,32 @@ export const AuthController = {
 
     registerUser: async (req,res) =>{
         let userId = AuthController.generateRandomId();
-        let {email,password,name,age,image} = req.body;
-        let existUser = await AuthController.checkExistUser(userId), existEmail = await AuthController.checkExistEmail(email)
+        // let {email,password,name,age} = req.form
+        let dataInput = {
+            email: req.body.email,
+            password: req.body.password,
+            name: req.body.name,
+            age: req.body.age
+        }
+        let {file} = req
+        let existUser = await AuthController.checkExistUser(userId), existEmail = await AuthController.checkExistEmail(dataInput.email)
         if(!existEmail && !existUser){
             try {
+                const uploadResult = await uploadFile(file.path,'Folder path created on cloudinary')
+                const {secure_url: image_url} = uploadResult
                 await model.nguoi_dung.create({
-                    nguoi_dung_id: userId,
-                    email: email,
-                    mat_khau: bcrypt.hashSync(password,10),
-                    ho_ten: name,
-                    tuoi: Number(age),
-                    anh_dai_dien: image
+                    data:{
+                        nguoi_dung_id: userId,
+                        email: dataInput.email,
+                        mat_khau: bcrypt.hashSync(dataInput.password,10),
+                        ho_ten: dataInput.name,
+                        tuoi: Number(dataInput.age),
+                        anh_dai_dien: image_url
+                    }
                 })
                 responseApi(res,200,{},COMPLETE_CREATE_USER_PROFILE)
             } catch (error) {
+                console.log(error)
                 responseApi(res,404,error,FAIL_CREATE_USER_PROFILE)
             }
             
@@ -100,7 +114,12 @@ export const AuthController = {
             if(await AuthController.checkExistUser(userId)){
                 responseApi(res,404,{},USER_PROFILE_EXIST)
             }else{
-                responseApi(res,404,{},EMAIL_EXIST)
+                if(!file){
+                    responseApi(res,404,{},IMAGE_PATH_INVALID)
+                }else{
+                    
+                    responseApi(res,404,{},EMAIL_EXIST)
+                }
             }
         }
     },
@@ -158,7 +177,7 @@ export const AuthController = {
                 responseApi(res,401,{},TOKEN_EXPIRED)
             }else{
                 try {
-                    let userData = await model.nguoi_dung.findOne({
+                    let userData = await model.nguoi_dung.findFirst({
                         where: {
                             nguoi_dung_id: userId
                         }
@@ -182,15 +201,11 @@ export const AuthController = {
             if(userId == 1){
                 responseApi(res,401,{},TOKEN_EXPIRED)
             }else{
-                let currentUser = await model.nguoi_dung.findOne({
+                let currentUser = await model.nguoi_dung.findFirst({
                     where:{
                         nguoi_dung_id: userId
                     }
                 })
-        
-                currentUser.dataValues.tuoi = age;
-                currentUser.dataValues.ho_ten = fullname;
-                currentUser.dataValues.anh_dai_dien = image;
         
                 try {
                     if(validationData.checkNull(age)){
@@ -200,14 +215,20 @@ export const AuthController = {
                     }else if(validationData.checkNull(image)){
                         responseApi(res,404,{},FIELD_REQUIRED + " image")
                     }else {
-                        await model.nguoi_dung.update(currentUser.dataValues,{
+                        await model.nguoi_dung.update({
                             where:{
-                                nguoi_dung_id: currentUser.dataValues.nguoi_dung_id
+                                nguoi_dung_id: currentUser.nguoi_dung_id
+                            },
+                            data:{
+                                tuoi: Number(age),
+                                ho_ten: fullname,
+                                anh_dai_dien: image
                             }
                         })       
                         responseApi(res,200,{},COMPLETE_UPDATE_USER_PROFILE)
                     }
                 } catch (error) {
+                    console.log(error)
                     responseApi(res,404,error,FAIL_UPDATE_USER_PROFILE)
                 }
             }
@@ -224,13 +245,15 @@ export const AuthController = {
 
         if(currentUser){
             let newPassword = bcrypt.hashSync(password,10)
-            let newPasswordConfirm = bcrypt.hashSync(confirmPassword,10)
-            if(newPasswordConfirm === newPassword){
-                currentUser.dataValues.mat_khau = newPassword
+            // let newPasswordConfirm = bcrypt.hashSync(confirmPassword,10)
+            if(bcrypt.compareSync(confirmPassword,newPassword)){
                 try {
-                    await model.nguoi_dung.update(currentUser.dataValues,{
+                    await model.nguoi_dung.update({
                         where:{
-                            nguoi_dung_id: currentUser.dataValues.nguoi_dung_id
+                            nguoi_dung_id: currentUser.nguoi_dung_id
+                        },
+                        data:{
+                            mat_khau: newPassword
                         }
                     })
                     responseApi(res,200,{},COMPLETE_CHANGE_PASSWORD)
@@ -247,16 +270,16 @@ export const AuthController = {
     },
 
     getAllUser: async (req,res) =>{
-        let data = await model.nguoi_dung.findAll()
+        let data = await model.nguoi_dung.findMany()
         responseApi(res,200,data,'Thanh cong')
     },
 
     getUserById: async (req,res) =>{
         let {userId} = req.params;
 
-        let data = await model.nguoi_dung.findOne({
+        let data = await model.nguoi_dung.findFirst({
             where: {
-                nguoi_dung_id: userId
+                nguoi_dung_id: Number(userId)
             }
         })
 

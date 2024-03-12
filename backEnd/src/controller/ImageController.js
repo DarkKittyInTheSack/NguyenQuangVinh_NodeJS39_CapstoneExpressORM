@@ -35,33 +35,39 @@ import {
 } from "../utils/messageUtil.js";
 import { AuthController } from "./AuthController.js";
 import { validationData } from "../utils/validationData.js";
+import {PrismaClient} from '@prisma/client'
+import uploadFile from "../middleware/cloudinary.js";
 
-const model = initModels(sequelize);
+let model = new PrismaClient()
 const Op = Sequelize.Op;
 
 export const ImageController = {
   checkImage: async (imageId) => {
-    let data = await model.hinh_anh.findOne({
+    let data = await model.hinh_anh.findFirst({
       where: {
-        hinh_id: imageId,
+        hinh_id: Number(imageId),
       },
     });
 
     return data;
   },
+
   checkComment: async (commentId) => {
-    let data = await model.binh_luan.findOne({
+    let data = await model.binh_luan.findFirst({
       where: {
-        binh_luan_id: commentId,
+        binh_luan_id: Number(commentId),
       },
     });
 
     return data;
   },
+
   getAllImage: async (req, res) => {
     try {
-      let data = await model.hinh_anh.findAll({
-        include: ["nguoi_dung"],
+      let data = await model.hinh_anh.findFirst({
+        include: {
+          nguoi_dung: true
+        }
       });
 
       data.length <= 0
@@ -74,7 +80,7 @@ export const ImageController = {
 
   getAllImagePaging: async (req, res) => {
     let { page } = req.params;
-    let pageSize = 20;
+    let pageSize = 10;
 
     let index = (page - 1) * pageSize;
 
@@ -82,10 +88,12 @@ export const ImageController = {
     let totalPage = Math.ceil(count / 20);
 
     try {
-      let data = await model.hinh_anh.findAll({
-        offset: index,
-        limit: pageSize,
-        include: ["nguoi_dung"],
+      let data = await model.hinh_anh.findMany({
+        skip: index,
+        take: pageSize,
+        include: {
+          nguoi_dung: true
+        },
       });
       data.length <= 0
         ? responseApi(res, 404, {}, NULL_IMAGE_LIST)
@@ -108,11 +116,13 @@ export const ImageController = {
         responseApi(res, 404, {}, TOKEN_EXPIRED);
       } else {
         try {
-          let data = await model.hinh_anh.findAll({
+          let data = await model.hinh_anh.findMany({
             where: {
               nguoi_dung_id: userId,
             },
-            include: ["nguoi_dung"],
+            include: {
+              nguoi_dung: true
+            },
           });
 
           responseApi(res, 200, data, COMPLETE_GET_IMAGE);
@@ -128,19 +138,20 @@ export const ImageController = {
   searchImage: async (req, res) => {
     let { key } = req.params;
     try {
-      let data = await model.hinh_anh.findAll({
-        where: {
-          ten_hinh: {
-            [Op.like]: `%${key}%`,
-          },
+      let data =await model.hinh_anh.findMany({
+        where:{
+          ten_hinh:{
+            search: key
+          }
         },
-        include: ["nguoi_dung"],
+        include: {
+          nguoi_dung: true
+        },
       });
       data.length > 0
         ? responseApi(res, 200, data, COMPLETE_GET_IMAGE)
         : responseApi(res, 404, [], NULL_SEARCH_RESULT);
     } catch (error) {
-      console.log(error);
       responseApi(res, 404, error, FAIL_GET_IMAGE);
     }
   },
@@ -149,43 +160,54 @@ export const ImageController = {
     let { imageId } = req.params;
 
     try {
-      let data = await model.binh_luan.findAll({
+      let data = await model.binh_luan.findMany({
         where: {
-          hinh_id: imageId,
+          hinh_id: Number(imageId),
         },
-        include: ["hinh_anh", "nguoi_dung"],
+        include: {
+          hinh_anh: true,
+          nguoi_dung: true
+        },
       });
       responseApi(res, 200, data, COMPLETE_GET_IMAGE_COMMENT);
     } catch (error) {
+      console.log(error);
       responseApi(res, 404, {}, FAIL_GET_COMMENT);
     }
   },
 
   addNewImage: async (req, res) => {
     let userId = await AuthController.getUserIdFromToken(req);
-    let { imageName, imageDescription, imageUrl } = req.body;
+    let dataInput = {
+      imageName: req.body.imageName,
+      imageDescription: req.body.imageDescription,
+    }
+    let {file} = req
+
     let imageId = AuthController.generateRandomId();
 
     if (userId != 0) {
       if (userId == 1) {
         responseApi(res, 404, {}, TOKEN_EXPIRED);
       } else {
-        if (validationData.checkNull(imageName)) {
+        if (validationData.checkNull(dataInput.imageName)) {
           responseApi(res, 404, {}, FIELD_REQUIRED + " " + imageName);
-        } else if (validationData.checkNull(imageDescription)) {
+        } else if (validationData.checkNull(dataInput.imageDescription)) {
           responseApi(res, 404, {}, FIELD_REQUIRED + " " + imageDescription);
-        } else if (validationData.checkNull(imageUrl)) {
-          responseApi(res, 404, {}, FIELD_REQUIRED + " " + imageUrl);
         } else {
           let currentUser = await AuthController.checkExistUser(userId);
           if (currentUser) {
             try {
+              const uploadImage = await uploadFile(file.path,'Folder path created on cloudinary')
+              const {secure_url: image_url} = uploadImage
               await model.hinh_anh.create({
-                hinh_id: imageId,
-                nguoi_dung_id: userId,
-                ten_hinh: imageName,
-                mo_ta: imageDescription,
-                duong_dan: imageUrl,
+                data:{
+                  hinh_id: imageId,
+                  nguoi_dung_id: userId,
+                  ten_hinh: dataInput.imageName,
+                  mo_ta: dataInput.imageDescription,
+                  duong_dan: image_url,
+                }
               });
 
               responseApi(res, 200, {}, COMPLETE_CREATE_IMAGE);
@@ -209,10 +231,6 @@ export const ImageController = {
     let currentImage = await ImageController.checkImage(imageId);
     let userId = await AuthController.getUserIdFromToken(req);
 
-    currentImage.dataValues.ten_hinh = imageName;
-    currentImage.dataValues.duong_dan = imageURL;
-    currentImage.dataValues.mo_ta = imageDescription;
-
     if (validationData.checkNull(imageName)) {
       responseApi(res, 404, {}, FIELD_REQUIRED + " imageName");
     } else if (validationData.checkNull(imageURL)) {
@@ -224,15 +242,19 @@ export const ImageController = {
         if (userId == 1) {
           responseApi(res, 404, {}, TOKEN_EXPIRED);
         } else {
-          if (userId === currentImage.dataValues.nguoi_dung_id) {
+          if (userId == currentImage.nguoi_dung_id) {
             if (currentImage) {
               try {
                 let data = await model.hinh_anh.update(
-                  currentImage.dataValues,
                   {
                     where: {
-                      hinh_id: currentImage.dataValues.hinh_id,
+                      hinh_id: currentImage.hinh_id,
                     },
+                    data:{
+                      ten_hinh: imageName,
+                      duong_dan: imageURL,
+                      mo_ta: imageDescription
+                    }
                   }
                 );
                 responseApi(res, 200, data, COMPLETE_UPDATE_IMAGE);
@@ -266,9 +288,9 @@ export const ImageController = {
         } else {
           if (currentImage) {
             try {
-              await model.hinh_anh.destroy({
+              await model.hinh_anh.delete({
                 where: {
-                  hinh_id: imageId,
+                  hinh_id: Number(imageId),
                 },
               });
               responseApi(res, 200, {}, COMPLETE_DELETE_IMAGE);
@@ -276,7 +298,7 @@ export const ImageController = {
               responseApi(
                 res,
                 404,
-                { err: error.sqlMessage },
+                error,
                 FAIL_DELETE_IMAGE
               );
             }
@@ -296,15 +318,16 @@ export const ImageController = {
 
     if (currentImage) {
       try {
-        let data = await model.binh_luan.findAll({
+        let data = await model.binh_luan.findMany({
           where: {
-            hinh_id: imageId,
+            hinh_id: Number(imageId),
           },
         });
         data.length <= 0
           ? responseApi(res, 404, data, NULL_COMMENT)
           : responseApi(res, 200, data, COMPLETE_GET_IMAGE_COMMENT);
       } catch (error) {
+        console.log(error);
         responseApi(res, 404, {}, FAIL_GET_COMMENT);
       }
     } else {
@@ -323,19 +346,22 @@ export const ImageController = {
     let totalPage = Math.ceil(count / 10);
 
     try {
-      let data = await model.binh_luan.findAll({
+      let data = await model.binh_luan.findMany({
         where: {
-          hinh_id: imageId,
+          hinh_id: Number(imageId),
         },
-        offset: index,
-        limit: pageSize,
-        include: ["nguoi_dung", "hinh_anh"],
+        skip: index,
+        take: pageSize,
+        include: {
+          nguoi_dung:true,
+          hinh_anh: true
+        },
       });
 
       responseApi(
         res,
         200,
-        { content: data, totalPage },
+        { content: data, totalPage,currentPage: page },
         COMPLETE_GET_IMAGE_COMMENT
       );
     } catch (error) {
@@ -361,11 +387,14 @@ export const ImageController = {
           } else {
             try {
               await model.binh_luan.create({
-                binh_luan_id: commentId,
-                nguoi_dung_id: userId,
-                hinh_id: Number(imageId),
-                ngay_binh_luan: new Date(),
-                noi_dung: content,
+                data:{
+                  binh_luan_id: commentId,
+                  nguoi_dung_id: userId,
+                  hinh_id: Number(imageId),
+                  ngay_binh_luan: new Date(),
+                  noi_dung: content,
+                }
+                
               });
 
               responseApi(res, 200, {}, COMPLETE_COMMENT);
@@ -398,15 +427,17 @@ export const ImageController = {
         } else {
           if (currentComment) {
             try {
-              currentComment.dataValues.noi_dung = comment;
               let data = await model.binh_luan.update(
-                currentComment.dataValues,
                 {
                   where: {
-                    binh_luan_id: currentComment.dataValues.binh_luan_id,
-                    hinh_id: currentComment.dataValues.hinh_id,
-                    nguoi_dung_id: userId,
+                    binh_luan_id: currentComment.binh_luan_id,
+                    hinh_id: currentComment.hinh_id,
+                    nguoi_dung_id: Number(userId),
                   },
+
+                  data:{
+                    noi_dung: comment
+                  }
                 }
               );
               responseApi(res, 200, data, COMPLETE_UPDATE_IMAGE_COMMENT);
@@ -436,7 +467,7 @@ export const ImageController = {
       } else {
         if (currentComment) {
           try {
-            await model.binh_luan.destroy({
+            await model.binh_luan.delete({
               where: {
                 binh_luan_id: commentId,
                 nguoi_dung_id: userId,
@@ -461,11 +492,14 @@ export const ImageController = {
         responseApi(res, 404, {}, TOKEN_EXPIRED);
       } else {
         try {
-          let data = await model.luu_anh.findAll({
+          let data = await model.luu_anh.findMany({
             where: {
-              nguoi_dung_id: userId,
+              nguoi_dung_id: Number(userId),
             },
-            include: ["nguoi_dung", "hinh_anh"],
+            include: {
+              nguoi_dung: true,
+              hinh_anh: true
+            },
           });
 
           data.length <= 0
@@ -491,9 +525,12 @@ export const ImageController = {
       }else{
         try {
           await model.luu_anh.create({
-            nguoi_dung_id: userId,
-            hinh_id: imageId,
-            ngay_luu: new Date()
+            data:{
+              nguoi_dung_id: userId,
+              hinh_id: imageId,
+              ngay_luu: new Date()
+            }
+            
           })
           responseApi(res,200,{},COMPLETE_SAVE_IMAGE)
         } catch (error) {
@@ -514,10 +551,10 @@ export const ImageController = {
         responseApi(res,404,{},TOKEN_EXPIRED)
       }else{
         try {
-          await model.luu_anh.destroy({
+          await model.luu_anh.delete({
             where:{
-              nguoi_dung_id: userId,
-              hinh_id: imageId,
+              nguoi_dung_id: Number(userId),
+              hinh_id: Number(imageId),
             }
           })
           responseApi(res,200,{},COMPLETE_UNSAVE_IMAGE)

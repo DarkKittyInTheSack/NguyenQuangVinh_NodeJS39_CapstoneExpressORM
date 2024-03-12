@@ -31,3 +31,4 @@ export const COMPLETE_SAVE_IMAGE = "Save this image successful";
 export const FAIL_SAVE_IMAGE = "Cannot save this image";
 export const COMPLETE_UNSAVE_IMAGE = "You has been unsave this image";
 export const FAIL_UNSAVE_IMAGE = "Cannot unsave this image";
+export const IMAGE_PATH_INVALID = "Image path invalid";

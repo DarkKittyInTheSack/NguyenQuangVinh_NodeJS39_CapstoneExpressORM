@@ -39,3 +39,5 @@ ALTER TABLE binh_luan ADD CONSTRAINT fk_binh_luan_nguoi_dung_id FOREIGN KEY (ngu
 ALTER TABLE binh_luan ADD CONSTRAINT fk_binh_luan_hinh_id FOREIGN KEY (hinh_id) REFERENCES hinh_anh (hinh_id) ON DELETE CASCADE;
 ALTER TABLE luu_anh ADD CONSTRAINT fk_luu_anh_nguoi_dung_id FOREIGN KEY (nguoi_dung_id) REFERENCES nguoi_dung (nguoi_dung_id) ON DELETE CASCADE;
 ALTER TABLE luu_anh ADD CONSTRAINT fk_luu_anh_hinh_id FOREIGN KEY (hinh_id) REFERENCES hinh_anh (hinh_id) ON DELETE CASCADE;
+
+ALTER TABLE hinh_anh ADD FULLTEXT ten_hinh_fulltext(ten_hinh)
