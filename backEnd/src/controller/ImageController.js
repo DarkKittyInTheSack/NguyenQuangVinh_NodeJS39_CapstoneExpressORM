@@ -561,12 +561,13 @@ export const ImageController = {
         try {
           await model.luu_anh.delete({
             where:{
-              nguoi_dung_id: Number(userId),
+              nguoi_dung_id_hinh_id: Number(imageId),
               hinh_id: Number(imageId),
             }
           })
           responseApi(res,200,{},COMPLETE_UNSAVE_IMAGE)
         } catch (error) {
+          console.log(error);
           responseApi(res,404,error,FAIL_UNSAVE_IMAGE)
         }
       }
