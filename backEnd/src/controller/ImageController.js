@@ -225,17 +225,22 @@ export const ImageController = {
   },
 
   updateImage: async (req, res) => {
-    let { imageName, imageURL, imageDescription } = req.body;
+    let dataInput = {
+      imageName: req.body.imageName,
+      imageDescription: req.body.imageDescription,
+    }
+    let {file} = req
+
     let { imageId } = req.params;
 
     let currentImage = await ImageController.checkImage(imageId);
     let userId = await AuthController.getUserIdFromToken(req);
 
-    if (validationData.checkNull(imageName)) {
+    if (validationData.checkNull(dataInput.imageName)) {
       responseApi(res, 404, {}, FIELD_REQUIRED + " imageName");
-    } else if (validationData.checkNull(imageURL)) {
+    } else if (validationData.checkNull(dataInput.imageURL)) {
       responseApi(res, 404, {}, FIELD_REQUIRED + " imageURL");
-    } else if (validationData.checkNull(imageDescription)) {
+    } else if (validationData.checkNull(dataInput.imageDescription)) {
       responseApi(res, 404, {}, FIELD_REQUIRED + " imageDescription");
     } else {
       if (userId != 0) {
@@ -245,15 +250,17 @@ export const ImageController = {
           if (userId == currentImage.nguoi_dung_id) {
             if (currentImage) {
               try {
+                const uploadImage = await uploadFile(file.path,'Folder path created on cloudinary')
+                const {secure_url: image_url} = uploadImage
                 let data = await model.hinh_anh.update(
                   {
                     where: {
                       hinh_id: currentImage.hinh_id,
                     },
                     data:{
-                      ten_hinh: imageName,
-                      duong_dan: imageURL,
-                      mo_ta: imageDescription
+                      ten_hinh: dataInput.imageName,
+                      duong_dan: image_url,
+                      mo_ta: dataInput.imageDescription
                     }
                   }
                 );
@@ -283,7 +290,7 @@ export const ImageController = {
       if (userId == 1) {
         responseApi(res, 404, {}, TOKEN_EXPIRED);
       } else {
-        if (userId != currentImage.dataValues.nguoi_dung_id) {
+        if (userId != currentImage.nguoi_dung_id) {
           responseApi(res, 404, {}, USER_NOT_EXIST);
         } else {
           if (currentImage) {
@@ -338,7 +345,6 @@ export const ImageController = {
   getCommentByIdPage: async (req, res) => {
     let { page, imageId } = req.params;
     let pageSize = 10;
-    // let currentImage = await ImageController.checkImage(imageId)
 
     let index = (page - 1) * pageSize;
 
@@ -469,12 +475,13 @@ export const ImageController = {
           try {
             await model.binh_luan.delete({
               where: {
-                binh_luan_id: commentId,
+                binh_luan_id: Number(commentId),
                 nguoi_dung_id: userId,
               },
             });
             responseApi(res, 200, {}, COMPLETE_DELETE_IMAGE_COMMENT);
           } catch (error) {
+            console.log(error)
             responseApi(res, 404, {}, FAIL_DELETE_IMAGE_COMMENT);
           }
         } else {
@@ -527,13 +534,14 @@ export const ImageController = {
           await model.luu_anh.create({
             data:{
               nguoi_dung_id: userId,
-              hinh_id: imageId,
+              hinh_id: Number(imageId),
               ngay_luu: new Date()
             }
             
           })
           responseApi(res,200,{},COMPLETE_SAVE_IMAGE)
         } catch (error) {
+          console.log(error);
           responseApi(res,404,error,FAIL_SAVE_IMAGE)
         }
       }
