@@ -64,7 +64,7 @@ export const ImageController = {
 
   getAllImage: async (req, res) => {
     try {
-      let data = await model.hinh_anh.findFirst({
+      let data = await model.hinh_anh.findMany({
         include: {
           nguoi_dung: true
         }
